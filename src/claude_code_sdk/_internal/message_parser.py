@@ -7,7 +7,10 @@ from .._errors import MessageParseError
 from ..types import (
     AssistantMessage,
     ContentBlock,
+    ElicitationRequestMessage,
     Message,
+    NotificationMessage,
+    ToolsChangedMessage,
     ResultMessage,
     SystemMessage,
     TextBlock,
@@ -143,6 +146,36 @@ def parse_message(data: dict[str, Any]) -> Message:
             except KeyError as e:
                 raise MessageParseError(
                     f"Missing required field in result message: {e}", data
+                ) from e
+
+        case "notification":
+            try:
+                return NotificationMessage(
+                    message=data["message"],
+                    level=data.get("level"),
+                )
+            except KeyError as e:
+                raise MessageParseError(
+                    f"Missing required field in notification message: {e}", data
+                ) from e
+
+        case "elicitation_request":
+            try:
+                return ElicitationRequestMessage(
+                    id=data["id"],
+                    prompt=data.get("prompt", ""),
+                )
+            except KeyError as e:
+                raise MessageParseError(
+                    f"Missing required field in elicitation request message: {e}", data
+                ) from e
+
+        case "tools_changed":
+            try:
+                return ToolsChangedMessage(tools=data.get("tools", []))
+            except KeyError as e:
+                raise MessageParseError(
+                    f"Missing required field in tools changed message: {e}", data
                 ) from e
 
         case _:

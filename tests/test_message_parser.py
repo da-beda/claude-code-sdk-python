@@ -6,12 +6,15 @@ from claude_code_sdk._errors import MessageParseError
 from claude_code_sdk._internal.message_parser import parse_message
 from claude_code_sdk.types import (
     AssistantMessage,
+    ElicitationRequestMessage,
     ResultMessage,
     SystemMessage,
     TextBlock,
     ToolResultBlock,
     ToolUseBlock,
     UserMessage,
+    NotificationMessage,
+    ToolsChangedMessage,
 )
 
 
@@ -173,6 +176,29 @@ class TestMessageParser:
         message = parse_message(data)
         assert isinstance(message, ResultMessage)
         assert message.subtype == "success"
+
+    def test_parse_notification_message(self):
+        """Test parsing a notification message."""
+        data = {"type": "notification", "level": "info", "message": "Update"}
+        message = parse_message(data)
+        assert isinstance(message, NotificationMessage)
+        assert message.level == "info"
+        assert message.message == "Update"
+
+    def test_parse_elicitation_request(self):
+        """Test parsing an elicitation request message."""
+        data = {"type": "elicitation_request", "id": "1", "prompt": "Next?"}
+        message = parse_message(data)
+        assert isinstance(message, ElicitationRequestMessage)
+        assert message.id == "1"
+        assert message.prompt == "Next?"
+
+    def test_parse_tools_changed(self):
+        """Test parsing a tools changed message."""
+        data = {"type": "tools_changed", "tools": ["A", "B"]}
+        message = parse_message(data)
+        assert isinstance(message, ToolsChangedMessage)
+        assert message.tools == ["A", "B"]
 
     def test_parse_invalid_data_type(self):
         """Test that non-dict data raises MessageParseError."""

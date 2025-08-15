@@ -115,7 +115,39 @@ class ResultMessage:
     result: str | None = None
 
 
-Message = UserMessage | AssistantMessage | SystemMessage | ResultMessage
+
+@dataclass
+class NotificationMessage:
+    """Notification message for asynchronous events."""
+
+    message: str
+    level: str | None = None
+
+
+@dataclass
+class ElicitationRequestMessage:
+    """Server-initiated elicitation request."""
+
+    id: str
+    prompt: str
+
+
+@dataclass
+class ToolsChangedMessage:
+    """Notification that the available tools have changed."""
+
+    tools: list[str]
+
+
+Message = (
+    UserMessage
+    | AssistantMessage
+    | SystemMessage
+    | ResultMessage
+    | NotificationMessage
+    | ElicitationRequestMessage
+    | ToolsChangedMessage
+)
 
 
 @dataclass

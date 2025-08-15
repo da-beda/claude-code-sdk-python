@@ -1,11 +1,19 @@
 """Claude SDK Client for interacting with Claude Code."""
 
+import inspect
 import os
 from collections.abc import AsyncIterable, AsyncIterator
-from typing import Any
+from typing import Any, Callable, Awaitable
 
 from ._errors import CLIConnectionError
-from .types import ClaudeCodeOptions, Message, ResultMessage
+from .types import (
+    ClaudeCodeOptions,
+    ElicitationRequestMessage,
+    Message,
+    NotificationMessage,
+    ResultMessage,
+    ToolsChangedMessage,
+)
 
 
 class ClaudeSDKClient:
@@ -90,12 +98,26 @@ class ClaudeSDKClient:
         ```
     """
 
-    def __init__(self, options: ClaudeCodeOptions | None = None):
+    def __init__(
+        self,
+        options: ClaudeCodeOptions | None = None,
+        *,
+        on_notification: Callable[[NotificationMessage], Awaitable[None] | None] | None = None,
+        on_elicitation_request: (
+            Callable[[ElicitationRequestMessage], Awaitable[None] | None] | None
+        ) = None,
+        on_tools_changed: (
+            Callable[[ToolsChangedMessage], Awaitable[None] | None] | None
+        ) = None,
+    ):
         """Initialize Claude SDK client."""
         if options is None:
             options = ClaudeCodeOptions()
         self.options = options
         self._transport: Any | None = None
+        self.on_notification = on_notification
+        self.on_elicitation_request = on_elicitation_request
+        self.on_tools_changed = on_tools_changed
         os.environ["CLAUDE_CODE_ENTRYPOINT"] = "sdk-py-client"
 
     async def connect(
@@ -118,6 +140,12 @@ class ClaudeSDKClient:
         )
         await self._transport.connect()
 
+    async def _call_handler(self, handler: Callable[[Any], Any], message: Any) -> None:
+        """Call handler and await if it returns awaitable."""
+        result = handler(message)
+        if inspect.isawaitable(result):
+            await result
+
     async def receive_messages(self) -> AsyncIterator[Message]:
         """Receive all messages from Claude."""
         if not self._transport:
@@ -126,7 +154,17 @@ class ClaudeSDKClient:
         from ._internal.message_parser import parse_message
 
         async for data in self._transport.receive_messages():
-            yield parse_message(data)
+            message = parse_message(data)
+            if isinstance(message, NotificationMessage) and self.on_notification:
+                await self._call_handler(self.on_notification, message)
+            elif (
+                isinstance(message, ElicitationRequestMessage)
+                and self.on_elicitation_request
+            ):
+                await self._call_handler(self.on_elicitation_request, message)
+            elif isinstance(message, ToolsChangedMessage) and self.on_tools_changed:
+                await self._call_handler(self.on_tools_changed, message)
+            yield message
 
     async def query(
         self, prompt: str | AsyncIterable[dict[str, Any]], session_id: str = "default"

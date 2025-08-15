@@ -458,6 +458,70 @@ class TestClaudeSDKClientEdgeCases:
 
         anyio.run(_test)
 
+
+class TestEventHandlers:
+    """Test that event handlers are invoked for server-initiated messages."""
+
+    def test_handlers_invoked(self):
+        """Handlers should be called for notification, elicitation, and tools change."""
+
+        async def _test():
+            with patch(
+                "claude_code_sdk._internal.transport.subprocess_cli.SubprocessCLITransport"
+            ) as mock_transport_class:
+                mock_transport = AsyncMock()
+                mock_transport_class.return_value = mock_transport
+
+                async def mock_receive():
+                    yield {"type": "notification", "level": "info", "message": "hi"}
+                    yield {
+                        "type": "elicitation_request",
+                        "id": "req1",
+                        "prompt": "what next?",
+                    }
+                    yield {"type": "tools_changed", "tools": ["A"]}
+                    yield {
+                        "type": "result",
+                        "subtype": "success",
+                        "duration_ms": 0,
+                        "duration_api_ms": 0,
+                        "is_error": False,
+                        "num_turns": 1,
+                        "session_id": "s",
+                    }
+
+                mock_transport.receive_messages = mock_receive
+                mock_transport.connect = AsyncMock()
+                mock_transport.disconnect = AsyncMock()
+
+                notifications: list[str] = []
+                elicited: list[str] = []
+                tools: list[list[str]] = []
+
+                async def on_notification(msg):
+                    notifications.append(msg.message)
+
+                async def on_elicitation(msg):
+                    elicited.append(msg.id)
+
+                async def on_tools(msg):
+                    tools.append(msg.tools)
+
+                async with ClaudeSDKClient(
+                    on_notification=on_notification,
+                    on_elicitation_request=on_elicitation,
+                    on_tools_changed=on_tools,
+                ) as client:
+                    async for m in client.receive_messages():
+                        if isinstance(m, ResultMessage):
+                            break
+
+                assert notifications == ["hi"]
+                assert elicited == ["req1"]
+                assert tools == [["A"]]
+
+        anyio.run(_test)
+
     def test_receive_response_not_connected(self):
         """Test receive_response when not connected."""
 
