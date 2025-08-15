@@ -47,14 +47,14 @@ async def test_notification_handler(client: ClaudeSDKClient, mock_transport):
     # Simulate receiving a notification message from the transport
     notification_event = {
         "type": "notification",
-        "message": "This is a test notification.",
+        "method": "log/info",
+        "params": {"message": "This is a test notification."},
     }
 
     async def message_stream():
         yield notification_event
         # Yield a result message to terminate the receive_response loop
         yield {"type": "result", "subtype": "success", "session_id": "123", "num_turns": 1, "duration_ms": 1, "duration_api_ms": 1, "is_error": False}
-
 
     mock_transport.receive_messages = message_stream
 
@@ -66,7 +66,8 @@ async def test_notification_handler(client: ClaudeSDKClient, mock_transport):
     notification_handler.assert_awaited_once()
     call_args = notification_handler.call_args[0][0]
     assert isinstance(call_args, NotificationMessage)
-    assert call_args.message == "This is a test notification."
+    assert call_args.method == "log/info"
+    assert call_args.params["message"] == "This is a test notification."
 
 
 async def test_elicitation_request_handler(client: ClaudeSDKClient, mock_transport):
@@ -155,3 +156,10 @@ async def test_resource_request_handler(client: ClaudeSDKClient, mock_transport)
     mock_transport.send_elicitation_response.assert_awaited_once_with(
         "resource-456", "File content"
     )
+
+
+def test_constructor_handlers():
+    """Test that handlers can be passed via the constructor."""
+    handler = AsyncMock()
+    client = ClaudeSDKClient(on_notification=handler)
+    assert client._on_notification_handler is handler

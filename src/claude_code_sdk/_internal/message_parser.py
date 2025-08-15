@@ -150,7 +150,11 @@ def parse_message(data: dict[str, Any]) -> Message:
                 ) from e
         case "notification":
             try:
-                return NotificationMessage(message=data["message"])
+                return NotificationMessage(
+                    method=data["method"],
+                    params=data.get("params", {}),
+                    data=data,
+                )
             except KeyError as e:
                 raise MessageParseError(
                     f"Missing required field in notification message: {e}", data
@@ -158,7 +162,7 @@ def parse_message(data: dict[str, Any]) -> Message:
         case "elicitation_request":
             try:
                 return ElicitationRequestMessage(
-                    id=data["id"], prompt=data["prompt"]
+                    id=data["id"], prompt=data["prompt"], data=data
                 )
             except KeyError as e:
                 raise MessageParseError(
@@ -169,10 +173,13 @@ def parse_message(data: dict[str, Any]) -> Message:
             return ToolsChangedMessage(
                 added_tools=data.get("added_tools", []),
                 removed_tools=data.get("removed_tools", []),
+                data=data,
             )
         case "resource_request":
             try:
-                return ResourceRequestMessage(id=data["id"], name=data["name"])
+                return ResourceRequestMessage(
+                    id=data["id"], name=data["name"], data=data
+                )
             except KeyError as e:
                 raise MessageParseError(
                     f"Missing required field in resource_request message: {e}",

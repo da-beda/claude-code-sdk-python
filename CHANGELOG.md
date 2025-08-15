@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.0.21
+
+- Add support for server-initiated events with a bidirectional event stream.
+- `ClaudeSDKClient` now handles background events and provides the following handlers:
+  - `on_notification`
+  - `on_elicitation_request`
+  - `on_tools_changed`
+  - `on_resource_request`
+- Handlers can be passed to the `ClaudeSDKClient` constructor.
+- Add `data` field to all server-initiated message types to include the raw message data.
+- Refactor `NotificationMessage` to use a more structured `method` and `params` format.
+
 ## 0.0.19
 
 - Add `ClaudeCodeOptions.add_dirs` for `--add-dir`

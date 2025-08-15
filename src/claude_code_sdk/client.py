@@ -79,7 +79,15 @@ class ClaudeSDKClient:
         ```
     """
 
-    def __init__(self, options: ClaudeCodeOptions | None = None):
+    def __init__(
+        self,
+        options: ClaudeCodeOptions | None = None,
+        *,
+        on_notification: NotificationHandler | None = None,
+        on_elicitation_request: ElicitationRequestHandler | None = None,
+        on_tools_changed: ToolsChangedHandler | None = None,
+        on_resource_request: ResourceRequestHandler | None = None,
+    ):
         """Initialize Claude SDK client."""
         if options is None:
             options = ClaudeCodeOptions()
@@ -97,6 +105,15 @@ class ClaudeSDKClient:
         self._send_stream: anyio.abc.ObjectSendStream[Message | None] | None = None
         self._receive_stream: anyio.abc.ObjectReceiveStream[Message | None] | None = None
         self._tg: TaskGroup | None = None
+
+        if on_notification:
+            self.on_notification(on_notification)
+        if on_elicitation_request:
+            self.on_elicitation_request(on_elicitation_request)
+        if on_tools_changed:
+            self.on_tools_changed(on_tools_changed)
+        if on_resource_request:
+            self.on_resource_request(on_resource_request)
 
     def on_notification(self, handler: NotificationHandler) -> None:
         """Register a handler for notification events."""
