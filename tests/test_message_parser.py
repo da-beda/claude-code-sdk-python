@@ -6,11 +6,16 @@ from claude_code_sdk._errors import MessageParseError
 from claude_code_sdk._internal.message_parser import parse_message
 from claude_code_sdk.types import (
     AssistantMessage,
+    ElicitationRequestMessage,
+    NotificationMessage,
+    PromptMessage,
+    ResourceMessage,
     ResultMessage,
     SystemMessage,
     TextBlock,
     ToolResultBlock,
     ToolUseBlock,
+    ToolsChangedMessage,
     UserMessage,
 )
 
@@ -198,6 +203,63 @@ class TestMessageParser:
         with pytest.raises(MessageParseError) as exc_info:
             parse_message({"type": "user"})
         assert "Missing required field in user message" in str(exc_info.value)
+
+    def test_parse_notification_message(self):
+        data = {
+            "type": "notification",
+            "event": "info",
+            "message": "progress",
+            "session_id": "s1",
+        }
+        msg = parse_message(data)
+        assert isinstance(msg, NotificationMessage)
+        assert msg.subtype == "info"
+        assert msg.message == "progress"
+
+    def test_parse_elicitation_request_message(self):
+        data = {
+            "type": "elicitation_request",
+            "id": "el1",
+            "prompt": "Need help",
+            "session_id": "s1",
+        }
+        msg = parse_message(data)
+        assert isinstance(msg, ElicitationRequestMessage)
+        assert msg.id == "el1"
+        assert msg.prompt == "Need help"
+
+    def test_parse_tools_changed_message(self):
+        data = {
+            "type": "notification",
+            "event": "tools/list_changed",
+            "tools": ["A", "B"],
+            "session_id": "s1",
+        }
+        msg = parse_message(data)
+        assert isinstance(msg, ToolsChangedMessage)
+        assert msg.tools == ["A", "B"]
+
+    def test_parse_resource_message(self):
+        data = {
+            "type": "resource",
+            "uri": "file://foo",
+            "content": "bar",
+            "session_id": "s1",
+        }
+        msg = parse_message(data)
+        assert isinstance(msg, ResourceMessage)
+        assert msg.uri == "file://foo"
+
+    def test_parse_prompt_message(self):
+        data = {
+            "type": "prompt",
+            "name": "summary",
+            "arguments": {"a": 1},
+            "session_id": "s1",
+        }
+        msg = parse_message(data)
+        assert isinstance(msg, PromptMessage)
+        assert msg.name == "summary"
 
     def test_parse_assistant_message_missing_fields(self):
         """Test that assistant message with missing fields raises MessageParseError."""

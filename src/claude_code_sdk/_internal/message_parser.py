@@ -7,10 +7,15 @@ from .._errors import MessageParseError
 from ..types import (
     AssistantMessage,
     ContentBlock,
+    ElicitationRequestMessage,
+    NotificationMessage,
+    PromptMessage,
     Message,
+    ResourceMessage,
     ResultMessage,
     SystemMessage,
     TextBlock,
+    ToolsChangedMessage,
     ThinkingBlock,
     ToolResultBlock,
     ToolUseBlock,
@@ -144,6 +149,45 @@ def parse_message(data: dict[str, Any]) -> Message:
                 raise MessageParseError(
                     f"Missing required field in result message: {e}", data
                 ) from e
+
+        case "notification":
+            event = data.get("event") or data.get("subtype", "")
+            if event == "tools/list_changed":
+                return ToolsChangedMessage(
+                    tools=data.get("tools", []),
+                    session_id=data.get("session_id"),
+                    data=data,
+                )
+            return NotificationMessage(
+                subtype=event,
+                message=data.get("message"),
+                session_id=data.get("session_id"),
+                data=data,
+            )
+
+        case "elicitation_request":
+            return ElicitationRequestMessage(
+                id=data.get("id", ""),
+                prompt=data.get("prompt", ""),
+                session_id=data.get("session_id"),
+                data=data,
+            )
+
+        case "resource":
+            return ResourceMessage(
+                uri=data.get("uri", ""),
+                content=data.get("content"),
+                session_id=data.get("session_id"),
+                data=data,
+            )
+
+        case "prompt":
+            return PromptMessage(
+                name=data.get("name", ""),
+                arguments=data.get("arguments", {}),
+                session_id=data.get("session_id"),
+                data=data,
+            )
 
         case _:
             raise MessageParseError(f"Unknown message type: {message_type}", data)

@@ -115,7 +115,66 @@ class ResultMessage:
     result: str | None = None
 
 
-Message = UserMessage | AssistantMessage | SystemMessage | ResultMessage
+@dataclass
+class NotificationMessage:
+    """Generic notification message from server."""
+
+    subtype: str
+    message: str | None = None
+    session_id: str | None = None
+    data: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class ElicitationRequestMessage:
+    """Server-initiated elicitation request."""
+
+    id: str
+    prompt: str
+    session_id: str | None = None
+    data: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class ToolsChangedMessage:
+    """Notification that available tools have changed."""
+
+    tools: list[str]
+    session_id: str | None = None
+    data: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class ResourceMessage:
+    """Message containing MCP resource contents."""
+
+    uri: str
+    content: Any
+    session_id: str | None = None
+    data: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class PromptMessage:
+    """Message containing MCP prompt invocation."""
+
+    name: str
+    arguments: dict[str, Any]
+    session_id: str | None = None
+    data: dict[str, Any] = field(default_factory=dict)
+
+
+Message = (
+    UserMessage
+    | AssistantMessage
+    | SystemMessage
+    | ResultMessage
+    | NotificationMessage
+    | ElicitationRequestMessage
+    | ToolsChangedMessage
+    | ResourceMessage
+    | PromptMessage
+)
 
 
 @dataclass

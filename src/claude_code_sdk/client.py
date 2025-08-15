@@ -1,11 +1,19 @@
 """Claude SDK Client for interacting with Claude Code."""
 
+import inspect
 import os
 from collections.abc import AsyncIterable, AsyncIterator
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 from ._errors import CLIConnectionError
-from .types import ClaudeCodeOptions, Message, ResultMessage
+from .types import (
+    ClaudeCodeOptions,
+    ElicitationRequestMessage,
+    Message,
+    NotificationMessage,
+    ResultMessage,
+    ToolsChangedMessage,
+)
 
 
 class ClaudeSDKClient:
@@ -90,13 +98,33 @@ class ClaudeSDKClient:
         ```
     """
 
-    def __init__(self, options: ClaudeCodeOptions | None = None):
+    def __init__(
+        self,
+        options: ClaudeCodeOptions | None = None,
+        *,
+        on_notification: Callable[[NotificationMessage], Any] | None = None,
+        on_elicitation_request: (
+            Callable[[ElicitationRequestMessage], Awaitable[str] | str] | None
+        ) = None,
+        on_tools_changed: Callable[[ToolsChangedMessage], Any] | None = None,
+    ):
         """Initialize Claude SDK client."""
         if options is None:
             options = ClaudeCodeOptions()
         self.options = options
         self._transport: Any | None = None
         os.environ["CLAUDE_CODE_ENTRYPOINT"] = "sdk-py-client"
+        self.on_notification = on_notification
+        self.on_elicitation_request = on_elicitation_request
+        self.on_tools_changed = on_tools_changed
+
+    async def _maybe_call(self, func: Callable[..., Any] | None, *args: Any) -> Any:
+        if not func:
+            return None
+        result = func(*args)
+        if inspect.isawaitable(result):
+            return await result
+        return result
 
     async def connect(
         self, prompt: str | AsyncIterable[dict[str, Any]] | None = None
@@ -126,7 +154,20 @@ class ClaudeSDKClient:
         from ._internal.message_parser import parse_message
 
         async for data in self._transport.receive_messages():
-            yield parse_message(data)
+            message = parse_message(data)
+
+            if isinstance(message, NotificationMessage):
+                await self._maybe_call(self.on_notification, message)
+            elif isinstance(message, ElicitationRequestMessage):
+                response = await self._maybe_call(
+                    self.on_elicitation_request, message
+                )
+                if response:
+                    await self.query(str(response), session_id=message.session_id or "default")
+            elif isinstance(message, ToolsChangedMessage):
+                await self._maybe_call(self.on_tools_changed, message)
+
+            yield message
 
     async def query(
         self, prompt: str | AsyncIterable[dict[str, Any]], session_id: str = "default"
@@ -161,6 +202,30 @@ class ClaudeSDKClient:
 
             if messages:
                 await self._transport.send_request(messages, {"session_id": session_id})
+
+    async def read_resource(self, uri: str, session_id: str = "default") -> None:
+        """Request reading of an MCP resource."""
+        if not self._transport:
+            raise CLIConnectionError("Not connected. Call connect() first.")
+        message = {"type": "resource_request", "uri": uri, "session_id": session_id}
+        await self._transport.send_request([message], {"session_id": session_id})
+
+    async def invoke_prompt(
+        self,
+        name: str,
+        arguments: dict[str, Any] | None = None,
+        session_id: str = "default",
+    ) -> None:
+        """Invoke an MCP prompt."""
+        if not self._transport:
+            raise CLIConnectionError("Not connected. Call connect() first.")
+        message = {
+            "type": "prompt_request",
+            "name": name,
+            "arguments": arguments or {},
+            "session_id": session_id,
+        }
+        await self._transport.send_request([message], {"session_id": session_id})
 
     async def interrupt(self) -> None:
         """Send interrupt signal (only works with streaming mode)."""
