@@ -33,7 +33,7 @@ def mock_transport():
 def client(monkeypatch, mock_transport):
     """Fixture to create a ClaudeSDKClient with a mock transport."""
     monkeypatch.setattr(
-        "claude_code_sdk._internal.transport.subprocess_cli.SubprocessCLITransport",
+        "claude_code_sdk.client.SubprocessCLITransport",
         MagicMock(return_value=mock_transport),
     )
     return ClaudeSDKClient()
