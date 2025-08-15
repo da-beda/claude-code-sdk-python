@@ -408,6 +408,19 @@ class SubprocessCLITransport(Transport):
 
         await self._send_control_request({"subtype": "interrupt"})
 
+    async def send_elicitation_response(self, request_id: str, content: str) -> None:
+        """Send a response to an elicitation request."""
+        if not self._stdin_stream:
+            raise CLIConnectionError("Stdin not available")
+
+        response_message = {
+            "type": "elicitation_response",
+            "id": request_id,
+            "content": content,
+        }
+
+        await self._stdin_stream.send(json.dumps(response_message) + "\n")
+
     async def _send_control_request(self, request: dict[str, Any]) -> dict[str, Any]:
         """Send a control request and wait for response."""
         if not self._stdin_stream:

@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal, TypedDict
+from typing import Any, Awaitable, Callable, Literal, TypedDict
 
 from typing_extensions import NotRequired  # For Python < 3.11 compatibility
 
@@ -115,7 +115,43 @@ class ResultMessage:
     result: str | None = None
 
 
-Message = UserMessage | AssistantMessage | SystemMessage | ResultMessage
+# Server-initiated message types
+@dataclass
+class NotificationMessage:
+    """Notification message from the server."""
+
+    message: str
+
+
+@dataclass
+class ElicitationRequestMessage:
+    """Elicitation request from the server, expecting a response."""
+
+    id: str
+    prompt: str
+
+
+@dataclass
+class ToolsChangedMessage:
+    """Notification that the available tools have changed."""
+
+    added_tools: list[str] = field(default_factory=list)
+    removed_tools: list[str] = field(default_factory=list)
+
+
+@dataclass
+class ResourceRequestMessage:
+    """Request to read a resource, expecting content in response."""
+
+    id: str
+    name: str
+
+
+# Handler function types
+NotificationHandler = Callable[[NotificationMessage], Awaitable[None]]
+ElicitationRequestHandler = Callable[[ElicitationRequestMessage], Awaitable[str]]
+ToolsChangedHandler = Callable[[ToolsChangedMessage], Awaitable[None]]
+ResourceRequestHandler = Callable[[ResourceRequestMessage], Awaitable[str]]
 
 
 @dataclass
@@ -140,3 +176,15 @@ class ClaudeCodeOptions:
     extra_args: dict[str, str | None] = field(
         default_factory=dict
     )  # Pass arbitrary CLI flags
+
+
+Message = (
+    UserMessage
+    | AssistantMessage
+    | SystemMessage
+    | ResultMessage
+    | NotificationMessage
+    | ElicitationRequestMessage
+    | ToolsChangedMessage
+    | ResourceRequestMessage
+)
