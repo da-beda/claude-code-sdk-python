@@ -120,7 +120,9 @@ class ResultMessage:
 class NotificationMessage:
     """Notification message from the server."""
 
-    message: str
+    method: str
+    params: dict[str, Any] = field(default_factory=dict)
+    data: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -129,6 +131,7 @@ class ElicitationRequestMessage:
 
     id: str
     prompt: str
+    data: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -137,6 +140,7 @@ class ToolsChangedMessage:
 
     added_tools: list[str] = field(default_factory=list)
     removed_tools: list[str] = field(default_factory=list)
+    data: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -145,6 +149,7 @@ class ResourceRequestMessage:
 
     id: str
     name: str
+    data: dict[str, Any] = field(default_factory=dict)
 
 
 # Handler function types
