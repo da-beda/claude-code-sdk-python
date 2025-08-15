@@ -16,8 +16,13 @@ class McpStdioServerConfig(TypedDict):
 
     type: NotRequired[Literal["stdio"]]  # Optional for backwards compatibility
     command: str
+    """The command to execute to start the server process."""
+
     args: NotRequired[list[str]]
+    """A list of command-line arguments to pass to the command."""
+
     env: NotRequired[dict[str, str]]
+    """A dictionary of environment variables to set for the server process."""
 
 
 class McpSSEServerConfig(TypedDict):
