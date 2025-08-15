@@ -6,6 +6,8 @@ from claude_code_sdk._errors import MessageParseError
 from claude_code_sdk._internal.message_parser import parse_message
 from claude_code_sdk.types import (
     AssistantMessage,
+    ElicitationRequestMessage,
+    NotificationMessage,
     ResultMessage,
     SystemMessage,
     TextBlock,
@@ -173,6 +175,26 @@ class TestMessageParser:
         message = parse_message(data)
         assert isinstance(message, ResultMessage)
         assert message.subtype == "success"
+
+    def test_parse_notification_message(self):
+        """Test parsing a notification message."""
+        data = {
+            "type": "notification",
+            "method": "notifications/info",
+            "params": {"message": "hi"},
+        }
+        message = parse_message(data)
+        assert isinstance(message, NotificationMessage)
+        assert message.method == "notifications/info"
+        assert message.params == {"message": "hi"}
+
+    def test_parse_elicitation_request(self):
+        """Test parsing an elicitation request message."""
+        data = {"type": "elicitation_request", "id": "req1", "prompt": "next"}
+        message = parse_message(data)
+        assert isinstance(message, ElicitationRequestMessage)
+        assert message.id == "req1"
+        assert message.prompt == "next"
 
     def test_parse_invalid_data_type(self):
         """Test that non-dict data raises MessageParseError."""

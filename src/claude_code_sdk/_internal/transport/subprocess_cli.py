@@ -437,3 +437,7 @@ class SubprocessCLITransport(Transport):
             raise CLIConnectionError(f"Control request failed: {response.get('error')}")
 
         return response
+
+    async def send_control_request(self, request: dict[str, Any]) -> dict[str, Any]:
+        """Public wrapper for control requests."""
+        return await self._send_control_request(request)

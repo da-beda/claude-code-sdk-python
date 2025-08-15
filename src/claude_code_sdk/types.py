@@ -115,7 +115,31 @@ class ResultMessage:
     result: str | None = None
 
 
-Message = UserMessage | AssistantMessage | SystemMessage | ResultMessage
+@dataclass
+class NotificationMessage:
+    """Generic notification message from server."""
+
+    method: str
+    params: dict[str, Any] | None = None
+
+
+@dataclass
+class ElicitationRequestMessage:
+    """Server-initiated elicitation request."""
+
+    id: str
+    prompt: str | None = None
+    data: dict[str, Any] | None = None
+
+
+Message = (
+    UserMessage
+    | AssistantMessage
+    | SystemMessage
+    | ResultMessage
+    | NotificationMessage
+    | ElicitationRequestMessage
+)
 
 
 @dataclass

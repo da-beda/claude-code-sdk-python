@@ -6,6 +6,8 @@ from claude_code_sdk import (
     ResultMessage,
 )
 from claude_code_sdk.types import (
+    ElicitationRequestMessage,
+    NotificationMessage,
     TextBlock,
     ThinkingBlock,
     ToolResultBlock,
@@ -71,6 +73,18 @@ class TestMessageTypes:
         assert msg.subtype == "success"
         assert msg.total_cost_usd == 0.01
         assert msg.session_id == "session-123"
+
+    def test_notification_message(self):
+        """Test creating a NotificationMessage."""
+        msg = NotificationMessage(method="notifications/info", params={"a": 1})
+        assert msg.method == "notifications/info"
+        assert msg.params == {"a": 1}
+
+    def test_elicitation_request_message(self):
+        """Test creating an ElicitationRequestMessage."""
+        msg = ElicitationRequestMessage(id="1", prompt="next")
+        assert msg.id == "1"
+        assert msg.prompt == "next"
 
 
 class TestOptions:

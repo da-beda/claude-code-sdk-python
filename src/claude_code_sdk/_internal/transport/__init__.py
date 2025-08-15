@@ -35,5 +35,10 @@ class Transport(ABC):
         """Check if transport is connected."""
         pass
 
+    @abstractmethod
+    async def send_control_request(self, request: dict[str, Any]) -> dict[str, Any]:
+        """Send a control request and return the response."""
+        pass
+
 
 __all__ = ["Transport"]

@@ -372,6 +372,138 @@ class TestClaudeSDKClientStreaming:
 
         anyio.run(_test)
 
+    def test_notification_handler_called(self):
+        """Ensure on_notification handler is invoked."""
+
+        async def _test():
+            with patch(
+                "claude_code_sdk._internal.transport.subprocess_cli.SubprocessCLITransport"
+            ) as mock_transport_class:
+                mock_transport = AsyncMock()
+                mock_transport_class.return_value = mock_transport
+
+                async def mock_receive():
+                    yield {
+                        "type": "notification",
+                        "method": "notifications/info",
+                        "params": {"message": "hi"},
+                    }
+                    yield {
+                        "type": "result",
+                        "subtype": "success",
+                        "duration_ms": 0,
+                        "duration_api_ms": 0,
+                        "is_error": False,
+                        "num_turns": 0,
+                        "session_id": "s",
+                    }
+
+                mock_transport.receive_messages = mock_receive
+                mock_transport.connect = AsyncMock()
+                mock_transport.disconnect = AsyncMock()
+
+                called = False
+
+                async def handler(msg):
+                    nonlocal called
+                    called = True
+                    assert msg.method == "notifications/info"
+
+                async with ClaudeSDKClient(on_notification=handler) as client:
+                    async for _ in client.receive_response():
+                        pass
+
+                assert called
+
+        anyio.run(_test)
+
+    def test_tools_changed_handler_called(self):
+        """Ensure on_tools_changed handler is invoked."""
+
+        async def _test():
+            with patch(
+                "claude_code_sdk._internal.transport.subprocess_cli.SubprocessCLITransport"
+            ) as mock_transport_class:
+                mock_transport = AsyncMock()
+                mock_transport_class.return_value = mock_transport
+
+                async def mock_receive():
+                    yield {
+                        "type": "notification",
+                        "method": "tools/list_changed",
+                        "params": {"added": ["A"], "removed": ["B"]},
+                    }
+                    yield {
+                        "type": "result",
+                        "subtype": "success",
+                        "duration_ms": 0,
+                        "duration_api_ms": 0,
+                        "is_error": False,
+                        "num_turns": 0,
+                        "session_id": "s",
+                    }
+
+                mock_transport.receive_messages = mock_receive
+                mock_transport.connect = AsyncMock()
+                mock_transport.disconnect = AsyncMock()
+
+                called = False
+
+                async def handler(added, removed):
+                    nonlocal called
+                    called = True
+                    assert added == ["A"]
+                    assert removed == ["B"]
+
+                async with ClaudeSDKClient(on_tools_changed=handler) as client:
+                    async for _ in client.receive_response():
+                        pass
+
+                assert called
+
+        anyio.run(_test)
+
+    def test_elicitation_handler_called(self):
+        """Ensure on_elicitation_request handler is invoked."""
+
+        async def _test():
+            with patch(
+                "claude_code_sdk._internal.transport.subprocess_cli.SubprocessCLITransport"
+            ) as mock_transport_class:
+                mock_transport = AsyncMock()
+                mock_transport_class.return_value = mock_transport
+
+                async def mock_receive():
+                    yield {"type": "elicitation_request", "id": "1", "prompt": "next"}
+                    yield {
+                        "type": "result",
+                        "subtype": "success",
+                        "duration_ms": 0,
+                        "duration_api_ms": 0,
+                        "is_error": False,
+                        "num_turns": 0,
+                        "session_id": "s",
+                    }
+
+                mock_transport.receive_messages = mock_receive
+                mock_transport.connect = AsyncMock()
+                mock_transport.disconnect = AsyncMock()
+
+                called = False
+
+                async def handler(msg):
+                    nonlocal called
+                    called = True
+                    assert msg.id == "1"
+
+                async with ClaudeSDKClient(on_elicitation_request=handler) as client:
+                    async for _ in client.receive_response():
+                        pass
+
+                assert called
+
+        anyio.run(_test)
+
 
 class TestQueryWithAsyncIterable:
     """Test query() function with async iterable inputs."""

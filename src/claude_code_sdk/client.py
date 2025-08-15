@@ -1,11 +1,31 @@
 """Claude SDK Client for interacting with Claude Code."""
 
+import inspect
 import os
-from collections.abc import AsyncIterable, AsyncIterator
+from collections.abc import AsyncIterable, AsyncIterator, Callable
 from typing import Any
 
 from ._errors import CLIConnectionError
-from .types import ClaudeCodeOptions, Message, ResultMessage
+from .types import (
+    ClaudeCodeOptions,
+    ElicitationRequestMessage,
+    Message,
+    NotificationMessage,
+    ResultMessage,
+)
+
+NotificationHandler = Callable[[NotificationMessage], Any]
+ElicitationHandler = Callable[[ElicitationRequestMessage], Any]
+ToolsChangedHandler = Callable[[list[str], list[str]], Any]
+
+
+async def _maybe_call(handler: Callable[..., Any] | None, *args: Any) -> None:
+    """Invoke handler and await if it returns an awaitable."""
+    if handler is None:
+        return
+    result = handler(*args)
+    if inspect.isawaitable(result):
+        await result
 
 
 class ClaudeSDKClient:
@@ -90,12 +110,22 @@ class ClaudeSDKClient:
         ```
     """
 
-    def __init__(self, options: ClaudeCodeOptions | None = None):
+    def __init__(
+        self,
+        options: ClaudeCodeOptions | None = None,
+        *,
+        on_notification: NotificationHandler | None = None,
+        on_elicitation_request: ElicitationHandler | None = None,
+        on_tools_changed: ToolsChangedHandler | None = None,
+    ):
         """Initialize Claude SDK client."""
         if options is None:
             options = ClaudeCodeOptions()
         self.options = options
         self._transport: Any | None = None
+        self.on_notification = on_notification
+        self.on_elicitation_request = on_elicitation_request
+        self.on_tools_changed = on_tools_changed
         os.environ["CLAUDE_CODE_ENTRYPOINT"] = "sdk-py-client"
 
     async def connect(
@@ -126,7 +156,23 @@ class ClaudeSDKClient:
         from ._internal.message_parser import parse_message
 
         async for data in self._transport.receive_messages():
-            yield parse_message(data)
+            message = parse_message(data)
+            if isinstance(message, NotificationMessage):
+                await _maybe_call(self.on_notification, message)
+                if (
+                    message.method == "tools/list_changed"
+                    and self.on_tools_changed
+                ):
+                    params = message.params or {}
+                    await _maybe_call(
+                        self.on_tools_changed,
+                        params.get("added", []),
+                        params.get("removed", []),
+                    )
+            elif isinstance(message, ElicitationRequestMessage):
+                await _maybe_call(self.on_elicitation_request, message)
+
+            yield message
 
     async def query(
         self, prompt: str | AsyncIterable[dict[str, Any]], session_id: str = "default"
@@ -161,6 +207,48 @@ class ClaudeSDKClient:
 
             if messages:
                 await self._transport.send_request(messages, {"session_id": session_id})
+
+    async def respond_to_elicitation(
+        self, request_id: str, content: str, session_id: str = "default"
+    ) -> None:
+        """Respond to a server-initiated elicitation request."""
+        if not self._transport:
+            raise CLIConnectionError("Not connected. Call connect() first.")
+        message = {
+            "type": "user",
+            "message": {"role": "user", "content": content},
+            "elicitation_request_id": request_id,
+            "session_id": session_id,
+        }
+        await self._transport.send_request([message], {"session_id": session_id})
+
+    async def _mcp_call(self, method: str, params: dict[str, Any] | None = None) -> Any:
+        """Send an MCP control request."""
+        if not self._transport:
+            raise CLIConnectionError("Not connected. Call connect() first.")
+        request = {
+            "subtype": "mcp",
+            "method": method,
+            "params": params or {},
+        }
+        response = await self._transport.send_control_request(request)
+        return response.get("result")
+
+    async def list_resources(self) -> Any:
+        """List available MCP resources."""
+        return await self._mcp_call("resources/list")
+
+    async def read_resource(self, uri: str) -> Any:
+        """Read an MCP resource by URI."""
+        return await self._mcp_call("resources/read", {"uri": uri})
+
+    async def list_prompts(self) -> Any:
+        """List available MCP prompts."""
+        return await self._mcp_call("prompts/list")
+
+    async def get_prompt(self, name: str) -> Any:
+        """Retrieve an MCP prompt by name."""
+        return await self._mcp_call("prompts/get", {"name": name})
 
     async def interrupt(self) -> None:
         """Send interrupt signal (only works with streaming mode)."""
