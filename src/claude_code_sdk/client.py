@@ -8,6 +8,7 @@ import anyio
 from anyio.abc import TaskGroup
 
 from ._errors import CLIConnectionError
+from ._internal.transport.subprocess_cli import SubprocessCLITransport
 from .types import (
     ClaudeCodeOptions,
     ElicitationRequestHandler,
@@ -171,8 +172,6 @@ class ClaudeSDKClient:
         self, prompt: str | AsyncIterable[dict[str, Any]] | None = None
     ) -> None:
         """Connect to Claude and start background message processing."""
-        from ._internal.transport.subprocess_cli import SubprocessCLITransport
-
         async def _empty_stream() -> AsyncIterator[dict[str, Any]]:
             return
             yield {}  # type: ignore[unreachable]
