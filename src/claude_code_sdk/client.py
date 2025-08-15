@@ -4,8 +4,23 @@ import os
 from collections.abc import AsyncIterable, AsyncIterator
 from typing import Any
 
+import anyio
+from anyio.abc import TaskGroup
+
 from ._errors import CLIConnectionError
-from .types import ClaudeCodeOptions, Message, ResultMessage
+from .types import (
+    ClaudeCodeOptions,
+    ElicitationRequestHandler,
+    ElicitationRequestMessage,
+    Message,
+    NotificationHandler,
+    NotificationMessage,
+    ResourceRequestHandler,
+    ResourceRequestMessage,
+    ResultMessage,
+    ToolsChangedHandler,
+    ToolsChangedMessage,
+)
 
 
 class ClaudeSDKClient:
@@ -17,7 +32,8 @@ class ClaudeSDKClient:
     queries, consider using the query() function instead.
 
     Key features:
-    - **Bidirectional**: Send and receive messages at any time
+    - **Bidirectional**: Send and receive messages at any time, with support
+      for server-initiated events like notifications and elicitation requests.
     - **Stateful**: Maintains conversation context across messages
     - **Interactive**: Send follow-ups based on responses
     - **Control flow**: Support for interrupts and session management
@@ -26,7 +42,7 @@ class ClaudeSDKClient:
     - Building chat interfaces or conversational UIs
     - Interactive debugging or exploration sessions
     - Multi-turn conversations with context
-    - When you need to react to Claude's responses
+    - When you need to react to Claude's responses and server events
     - Real-time applications with user input
     - When you need interrupt capabilities
 
@@ -37,56 +53,29 @@ class ClaudeSDKClient:
     - When all inputs are known upfront
     - Stateless operations
 
-    Example - Interactive conversation:
-        ```python
-        # Automatically connects with empty stream for interactive use
-        async with ClaudeSDKClient() as client:
-            # Send initial message
-            await client.query("Let's solve a math problem step by step")
-
-            # Receive and process response
-            async for message in client.receive_messages():
-                if "ready" in str(message.content).lower():
-                    break
-
-            # Send follow-up based on response
-            await client.query("What's 15% of 80?")
-
-            # Continue conversation...
-        # Automatically disconnects
-        ```
-
-    Example - With interrupt:
-        ```python
-        async with ClaudeSDKClient() as client:
-            # Start a long task
-            await client.query("Count to 1000")
-
-            # Interrupt after 2 seconds
-            await anyio.sleep(2)
-            await client.interrupt()
-
-            # Send new instruction
-            await client.query("Never mind, what's 2+2?")
-        ```
-
-    Example - Manual connection:
+    Example - Interactive conversation with event handlers:
         ```python
         client = ClaudeSDKClient()
 
-        # Connect with initial message stream
-        async def message_stream():
-            yield {"type": "user", "message": {"role": "user", "content": "Hello"}}
+        # Define handlers for server-initiated events
+        async def handle_notification(msg: NotificationMessage):
+            print(f"Server notification: {msg.message}")
 
-        await client.connect(message_stream())
+        async def handle_elicitation(req: ElicitationRequestMessage) -> str:
+            response = input(f"Server asks: {req.prompt} ")
+            return response
 
-        # Send additional messages dynamically
-        await client.query("What's the weather?")
+        # Register handlers
+        client.on_notification(handle_notification)
+        client.on_elicitation_request(handle_elicitation)
 
-        async for message in client.receive_messages():
-            print(message)
-
-        await client.disconnect()
+        async with client:
+            await client.query("Start a process that will send notifications.")
+            # The client will automatically handle incoming events in the background
+            # while you can continue to interact with it.
+            await client.query("What is 2+2?")
+            async for message in client.receive_response():
+                print(message)
         ```
     """
 
@@ -98,17 +87,76 @@ class ClaudeSDKClient:
         self._transport: Any | None = None
         os.environ["CLAUDE_CODE_ENTRYPOINT"] = "sdk-py-client"
 
+        # Event handlers
+        self._on_notification_handler: NotificationHandler | None = None
+        self._on_elicitation_request_handler: ElicitationRequestHandler | None = None
+        self._on_tools_changed_handler: ToolsChangedHandler | None = None
+        self._on_resource_request_handler: ResourceRequestHandler | None = None
+
+        # Background processing
+        self._send_stream: anyio.abc.ObjectSendStream[Message | None] | None = None
+        self._receive_stream: anyio.abc.ObjectReceiveStream[Message | None] | None = None
+        self._tg: TaskGroup | None = None
+
+    def on_notification(self, handler: NotificationHandler) -> None:
+        """Register a handler for notification events."""
+        self._on_notification_handler = handler
+
+    def on_elicitation_request(self, handler: ElicitationRequestHandler) -> None:
+        """Register a handler for elicitation requests from the server."""
+        self._on_elicitation_request_handler = handler
+
+    def on_tools_changed(self, handler: ToolsChangedHandler) -> None:
+        """Register a handler for tools_changed events."""
+        self._on_tools_changed_handler = handler
+
+    def on_resource_request(self, handler: ResourceRequestHandler) -> None:
+        """Register a handler for resource requests from the server."""
+        self._on_resource_request_handler = handler
+
+    async def _message_pump(self) -> None:
+        if not self._transport or not self._send_stream:
+            return
+
+        from ._internal.message_parser import parse_message
+
+        try:
+            async with self._send_stream:
+                async for data in self._transport.receive_messages():
+                    message = parse_message(data)
+
+                    if isinstance(message, NotificationMessage):
+                        if self._on_notification_handler:
+                            await self._on_notification_handler(message)
+                    elif isinstance(message, ElicitationRequestMessage):
+                        if self._on_elicitation_request_handler:
+                            response = await self._on_elicitation_request_handler(
+                                message
+                            )
+                            await self._transport.send_elicitation_response(
+                                message.id, response
+                            )
+                    elif isinstance(message, ToolsChangedMessage):
+                        if self._on_tools_changed_handler:
+                            await self._on_tools_changed_handler(message)
+                    elif isinstance(message, ResourceRequestMessage):
+                        if self._on_resource_request_handler:
+                            content = await self._on_resource_request_handler(message)
+                            await self._transport.send_elicitation_response(
+                                message.id, content
+                            )
+                    else:
+                        await self._send_stream.send(message)
+        except (CLIConnectionError, anyio.EndOfStream):
+            pass
+
     async def connect(
         self, prompt: str | AsyncIterable[dict[str, Any]] | None = None
     ) -> None:
-        """Connect to Claude with a prompt or message stream."""
+        """Connect to Claude and start background message processing."""
         from ._internal.transport.subprocess_cli import SubprocessCLITransport
 
-        # Auto-connect with empty async iterable if no prompt is provided
         async def _empty_stream() -> AsyncIterator[dict[str, Any]]:
-            # Never yields, but indicates that this function is an iterator and
-            # keeps the connection open.
-            # This yield is never reached but makes this an async generator
             return
             yield {}  # type: ignore[unreachable]
 
@@ -118,30 +166,35 @@ class ClaudeSDKClient:
         )
         await self._transport.connect()
 
+        send_stream, receive_stream = anyio.create_memory_object_stream(100)
+        self._send_stream = send_stream
+        self._receive_stream = receive_stream
+        if self._tg:
+            self._tg.start_soon(self._message_pump)
+
     async def receive_messages(self) -> AsyncIterator[Message]:
-        """Receive all messages from Claude."""
-        if not self._transport:
+        """
+        Receive messages from Claude, handling server-initiated events automatically.
+
+        This async iterator yields standard messages (User, Assistant, System, Result)
+        while transparently handling events like notifications and elicitation
+        requests in the background via their registered handlers.
+        """
+        if not self._transport or not self._receive_stream:
             raise CLIConnectionError("Not connected. Call connect() first.")
 
-        from ._internal.message_parser import parse_message
-
-        async for data in self._transport.receive_messages():
-            yield parse_message(data)
+        async for message in self._receive_stream:
+            yield message
 
     async def query(
         self, prompt: str | AsyncIterable[dict[str, Any]], session_id: str = "default"
     ) -> None:
         """
         Send a new request in streaming mode.
-
-        Args:
-            prompt: Either a string message or an async iterable of message dictionaries
-            session_id: Session identifier for the conversation
         """
         if not self._transport:
             raise CLIConnectionError("Not connected. Call connect() first.")
 
-        # Handle string prompts
         if isinstance(prompt, str):
             message = {
                 "type": "user",
@@ -151,10 +204,8 @@ class ClaudeSDKClient:
             }
             await self._transport.send_request([message], {"session_id": session_id})
         else:
-            # Handle AsyncIterable prompts
             messages = []
             async for msg in prompt:
-                # Ensure session_id is set on each message
                 if "session_id" not in msg:
                     msg["session_id"] = session_id
                 messages.append(msg)
@@ -170,39 +221,7 @@ class ClaudeSDKClient:
 
     async def receive_response(self) -> AsyncIterator[Message]:
         """
-        Receive messages from Claude until and including a ResultMessage.
-
-        This async iterator yields all messages in sequence and automatically terminates
-        after yielding a ResultMessage (which indicates the response is complete).
-        It's a convenience method over receive_messages() for single-response workflows.
-
-        **Stopping Behavior:**
-        - Yields each message as it's received
-        - Terminates immediately after yielding a ResultMessage
-        - The ResultMessage IS included in the yielded messages
-        - If no ResultMessage is received, the iterator continues indefinitely
-
-        Yields:
-            Message: Each message received (UserMessage, AssistantMessage, SystemMessage, ResultMessage)
-
-        Example:
-            ```python
-            async with ClaudeSDKClient() as client:
-                await client.query("What's the capital of France?")
-
-                async for msg in client.receive_response():
-                    if isinstance(msg, AssistantMessage):
-                        for block in msg.content:
-                            if isinstance(block, TextBlock):
-                                print(f"Claude: {block.text}")
-                    elif isinstance(msg, ResultMessage):
-                        print(f"Cost: ${msg.total_cost_usd:.4f}")
-                        # Iterator will terminate after this message
-            ```
-
-        Note:
-            To collect all messages: `messages = [msg async for msg in client.receive_response()]`
-            The final message in the list will always be a ResultMessage.
+        Receive messages from Claude until a ResultMessage is received.
         """
         async for message in self.receive_messages():
             yield message
@@ -216,11 +235,16 @@ class ClaudeSDKClient:
             self._transport = None
 
     async def __aenter__(self) -> "ClaudeSDKClient":
-        """Enter async context - automatically connects with empty stream for interactive use."""
+        """Enter async context - automatically connects and starts background processing."""
+        self._tg = anyio.create_task_group()
+        await self._tg.__aenter__()
         await self.connect()
         return self
 
     async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> bool:
         """Exit async context - always disconnects."""
         await self.disconnect()
+        if self._tg:
+            await self._tg.__aexit__(exc_type, exc_val, exc_tb)
+            self._tg = None
         return False

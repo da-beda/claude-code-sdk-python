@@ -243,7 +243,7 @@ class TestClaudeSDKClientStreaming:
                         "session_id": "test",
                         "total_cost_usd": 0.001,
                     }
-                    # This should not be yielded
+                    # This should not be yielded by receive_response, but the pump will still process it
                     yield {
                         "type": "assistant",
                         "message": {
@@ -251,8 +251,8 @@ class TestClaudeSDKClientStreaming:
                             "content": [
                                 {"type": "text", "text": "Should not see this"}
                             ],
+                            "model": "claude-opus-4-1-20250805",
                         },
-                        "model": "claude-opus-4-1-20250805",
                     }
 
                 mock_transport.receive_messages = mock_receive
@@ -509,9 +509,12 @@ class TestClaudeSDKClientEdgeCases:
                 mock_transport = AsyncMock()
                 mock_transport_class.return_value = mock_transport
 
-                with pytest.raises(ValueError):
+                with pytest.raises(ExceptionGroup) as exc_info:
                     async with ClaudeSDKClient():
                         raise ValueError("Test error")
+
+                assert len(exc_info.value.exceptions) == 1
+                assert isinstance(exc_info.value.exceptions[0], ValueError)
 
                 # Disconnect should still be called
                 mock_transport.disconnect.assert_called_once()
