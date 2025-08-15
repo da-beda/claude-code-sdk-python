@@ -1,11 +1,19 @@
 """Claude SDK Client for interacting with Claude Code."""
 
 import os
-from collections.abc import AsyncIterable, AsyncIterator
+import inspect
+from collections.abc import AsyncIterable, AsyncIterator, Callable
 from typing import Any
 
 from ._errors import CLIConnectionError
-from .types import ClaudeCodeOptions, Message, ResultMessage
+from .types import (
+    ClaudeCodeOptions,
+    Message,
+    ResultMessage,
+    NotificationMessage,
+    ElicitationRequestMessage,
+    ToolsChangedMessage,
+)
 
 
 class ClaudeSDKClient:
@@ -90,13 +98,24 @@ class ClaudeSDKClient:
         ```
     """
 
-    def __init__(self, options: ClaudeCodeOptions | None = None):
+    def __init__(
+        self,
+        options: ClaudeCodeOptions | None = None,
+        *,
+        on_notification: Callable[[NotificationMessage], Any] | None = None,
+        on_elicitation_request: Callable[[ElicitationRequestMessage], Any]
+        | None = None,
+        on_tools_changed: Callable[[ToolsChangedMessage], Any] | None = None,
+    ):
         """Initialize Claude SDK client."""
         if options is None:
             options = ClaudeCodeOptions()
         self.options = options
         self._transport: Any | None = None
         os.environ["CLAUDE_CODE_ENTRYPOINT"] = "sdk-py-client"
+        self._on_notification = on_notification
+        self._on_elicitation_request = on_elicitation_request
+        self._on_tools_changed = on_tools_changed
 
     async def connect(
         self, prompt: str | AsyncIterable[dict[str, Any]] | None = None
@@ -126,7 +145,41 @@ class ClaudeSDKClient:
         from ._internal.message_parser import parse_message
 
         async for data in self._transport.receive_messages():
-            yield parse_message(data)
+            message = parse_message(data)
+            if isinstance(message, NotificationMessage) and self._on_notification:
+                result = self._on_notification(message)
+                if inspect.isawaitable(result):
+                    await result
+            elif (
+                isinstance(message, ElicitationRequestMessage)
+                and self._on_elicitation_request
+            ):
+                result = self._on_elicitation_request(message)
+                if inspect.isawaitable(result):
+                    await result
+            elif isinstance(message, ToolsChangedMessage) and self._on_tools_changed:
+                result = self._on_tools_changed(message)
+                if inspect.isawaitable(result):
+                    await result
+            yield message
+
+    def set_notification_handler(
+        self, handler: Callable[[NotificationMessage], Any]
+    ) -> None:
+        """Register a handler for notification messages."""
+        self._on_notification = handler
+
+    def set_elicitation_request_handler(
+        self, handler: Callable[[ElicitationRequestMessage], Any]
+    ) -> None:
+        """Register a handler for elicitation requests."""
+        self._on_elicitation_request = handler
+
+    def set_tools_changed_handler(
+        self, handler: Callable[[ToolsChangedMessage], Any]
+    ) -> None:
+        """Register a handler for tools changed notifications."""
+        self._on_tools_changed = handler
 
     async def query(
         self, prompt: str | AsyncIterable[dict[str, Any]], session_id: str = "default"

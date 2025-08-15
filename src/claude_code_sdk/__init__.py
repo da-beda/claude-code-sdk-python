@@ -15,6 +15,9 @@ from .types import (
     ContentBlock,
     McpServerConfig,
     Message,
+    NotificationMessage,
+    ElicitationRequestMessage,
+    ToolsChangedMessage,
     PermissionMode,
     ResultMessage,
     SystemMessage,
@@ -25,7 +28,7 @@ from .types import (
     UserMessage,
 )
 
-__version__ = "0.0.20"
+__version__ = "0.0.21"
 
 __all__ = [
     # Main exports
@@ -39,6 +42,9 @@ __all__ = [
     "SystemMessage",
     "ResultMessage",
     "Message",
+    "NotificationMessage",
+    "ElicitationRequestMessage",
+    "ToolsChangedMessage",
     "ClaudeCodeOptions",
     "TextBlock",
     "ThinkingBlock",

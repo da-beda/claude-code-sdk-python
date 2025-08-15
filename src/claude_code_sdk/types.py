@@ -115,7 +115,41 @@ class ResultMessage:
     result: str | None = None
 
 
-Message = UserMessage | AssistantMessage | SystemMessage | ResultMessage
+@dataclass
+class NotificationMessage:
+    """Server-initiated notification message."""
+
+    level: str | None = None
+    message: str | None = None
+    data: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class ElicitationRequestMessage:
+    """Message representing a server elicitation request."""
+
+    id: str | None = None
+    prompt: str | None = None
+    data: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class ToolsChangedMessage:
+    """Notification that the available tools have changed."""
+
+    tools: list[str] | None = None
+    data: dict[str, Any] = field(default_factory=dict)
+
+
+Message = (
+    UserMessage
+    | AssistantMessage
+    | SystemMessage
+    | ResultMessage
+    | NotificationMessage
+    | ElicitationRequestMessage
+    | ToolsChangedMessage
+)
 
 
 @dataclass

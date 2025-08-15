@@ -12,6 +12,9 @@ from claude_code_sdk.types import (
     ToolResultBlock,
     ToolUseBlock,
     UserMessage,
+    NotificationMessage,
+    ElicitationRequestMessage,
+    ToolsChangedMessage,
 )
 
 
@@ -198,6 +201,33 @@ class TestMessageParser:
         with pytest.raises(MessageParseError) as exc_info:
             parse_message({"type": "user"})
         assert "Missing required field in user message" in str(exc_info.value)
+
+    def test_parse_notification_message(self):
+        """Test parsing a notification message."""
+        data = {"type": "notification", "level": "info", "message": "hi"}
+        message = parse_message(data)
+        assert isinstance(message, NotificationMessage)
+        assert message.level == "info"
+        assert message.message == "hi"
+
+    def test_parse_elicitation_request_message(self):
+        """Test parsing an elicitation request message."""
+        data = {
+            "type": "elicitation_request",
+            "id": "req1",
+            "prompt": "Need input",
+        }
+        message = parse_message(data)
+        assert isinstance(message, ElicitationRequestMessage)
+        assert message.id == "req1"
+        assert message.prompt == "Need input"
+
+    def test_parse_tools_changed_message(self):
+        """Test parsing tools changed message."""
+        data = {"type": "tools_changed", "tools": ["A", "B"]}
+        message = parse_message(data)
+        assert isinstance(message, ToolsChangedMessage)
+        assert message.tools == ["A", "B"]
 
     def test_parse_assistant_message_missing_fields(self):
         """Test that assistant message with missing fields raises MessageParseError."""

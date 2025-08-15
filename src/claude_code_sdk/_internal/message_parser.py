@@ -8,12 +8,15 @@ from ..types import (
     AssistantMessage,
     ContentBlock,
     Message,
+    NotificationMessage,
     ResultMessage,
     SystemMessage,
     TextBlock,
     ThinkingBlock,
+    ToolsChangedMessage,
     ToolResultBlock,
     ToolUseBlock,
+    ElicitationRequestMessage,
     UserMessage,
 )
 
@@ -144,6 +147,26 @@ def parse_message(data: dict[str, Any]) -> Message:
                 raise MessageParseError(
                     f"Missing required field in result message: {e}", data
                 ) from e
+
+        case "notification":
+            return NotificationMessage(
+                level=data.get("level"),
+                message=data.get("message"),
+                data=data,
+            )
+
+        case "elicitation_request":
+            return ElicitationRequestMessage(
+                id=data.get("id"),
+                prompt=data.get("prompt"),
+                data=data,
+            )
+
+        case "tools_changed" | "tools/list_changed":
+            return ToolsChangedMessage(
+                tools=data.get("tools"),
+                data=data,
+            )
 
         case _:
             raise MessageParseError(f"Unknown message type: {message_type}", data)

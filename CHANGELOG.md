@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.21
+
+- Add client handlers for server-initiated notifications, elicitation requests, and tool list changes
+
 ## 0.0.19
 
 - Add `ClaudeCodeOptions.add_dirs` for `--add-dir`
