@@ -7,7 +7,9 @@ from typing import Any
 import anyio
 from anyio.abc import TaskGroup
 
-from ._errors import CLIConnectionError
+from ._errors import CLIConnectionError, ToolExecutionError
+from ._internal.transport import Transport
+from ._internal.transport.http import HttpTransport
 from ._internal.transport.subprocess_cli import SubprocessCLITransport
 from .types import (
     ClaudeCodeOptions,
@@ -84,6 +86,7 @@ class ClaudeSDKClient:
         self,
         options: ClaudeCodeOptions | None = None,
         *,
+        transport: Transport | None = None,
         on_notification: NotificationHandler | None = None,
         on_elicitation_request: ElicitationRequestHandler | None = None,
         on_tools_changed: ToolsChangedHandler | None = None,
@@ -93,7 +96,7 @@ class ClaudeSDKClient:
         if options is None:
             options = ClaudeCodeOptions()
         self.options = options
-        self._transport: Any | None = None
+        self._transport = transport
         os.environ["CLAUDE_CODE_ENTRYPOINT"] = "sdk-py-client"
 
         # Event handlers
@@ -141,6 +144,15 @@ class ClaudeSDKClient:
         try:
             async with self._send_stream:
                 async for data in self._transport.receive_messages():
+                    if "error" in data and data.get("error"):
+                        error_data = data["error"]
+                        hint = error_data.get("data", {}).get("hint")
+                        raise ToolExecutionError(
+                            message=error_data.get("message", "Unknown error"),
+                            code=error_data.get("code", -1),
+                            hint=hint,
+                        )
+
                     message = parse_message(data)
 
                     if isinstance(message, NotificationMessage):
@@ -176,10 +188,21 @@ class ClaudeSDKClient:
             return
             yield {}  # type: ignore[unreachable]
 
-        self._transport = SubprocessCLITransport(
-            prompt=_empty_stream() if prompt is None else prompt,
-            options=self.options,
-        )
+        if self._transport is None:
+            transport_config = self.options.transport
+            if transport_config and transport_config.get("type") == "http":
+                # We know this is a McpHttpServerConfig, but since it's a TypedDict
+                # we access fields like a regular dict.
+                url = transport_config.get("url")
+                if not url:
+                    raise ValueError("HTTP transport config missing 'url'")
+                self._transport = HttpTransport(url=url)
+            else:
+                # Default to subprocess for stdio config or no config
+                self._transport = SubprocessCLITransport(
+                    prompt=_empty_stream() if prompt is None else prompt,
+                    options=self.options,
+                )
         await self._transport.connect()
 
         send_stream, receive_stream = anyio.create_memory_object_stream(100)

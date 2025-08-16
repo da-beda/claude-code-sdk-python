@@ -5,6 +5,20 @@ Example of multi-turn conversation using trio with the Claude SDK.
 This demonstrates how to use the ClaudeSDKClient with trio for interactive,
 stateful conversations where you can send follow-up messages based on
 Claude's responses.
+
+Configuration:
+By default, this script uses the standard subprocess-based transport. To use the
+networked HTTP transport, you must have a `cw_mcp` server running and modify
+the `ClaudeSDKClient` instantiation to include the transport configuration.
+
+For example:
+options = ClaudeCodeOptions(
+    transport={"type": "http", "url": "http://127.0.0.1:8080"},
+    model="claude-3-5-sonnet-20241022",
+)
+client = ClaudeSDKClient(options=options)
+
+See `http_transport_example.py` for a dedicated example.
 """
 
 import trio

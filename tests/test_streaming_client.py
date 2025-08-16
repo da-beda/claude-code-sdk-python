@@ -481,11 +481,14 @@ class TestClaudeSDKClientEdgeCases:
 
                 client = ClaudeSDKClient()
                 await client.connect()
-                # Second connect should create new transport
+                # Second connect should be idempotent and not create a new transport
                 await client.connect()
 
-                # Should have been called twice
-                assert mock_transport_class.call_count == 2
+                # Transport should be created only once
+                mock_transport_class.assert_called_once()
+                # But connect on the instance should be called twice
+                mock_transport.connect.assert_awaited()
+                assert mock_transport.connect.call_count == 2
 
         anyio.run(_test)
 

@@ -109,29 +109,26 @@ async def main():
     """Main function to run the bidirectional client example."""
     print("--- Claude SDK Bidirectional Client Example ---")
 
-    # Initialize the client, passing handlers to the constructor
+    # This example uses a mock transport to simulate server-sent events.
+    mock_transport = MockTransport()
+
+    # Initialize the client, injecting the mock transport and handlers.
+    # In a real-world scenario with a networked server, you would instead
+    # configure the HTTP transport via `ClaudeCodeOptions`, like this:
+    #
+    # from claude_code_sdk.types import ClaudeCodeOptions
+    # options = ClaudeCodeOptions(transport={"type": "http", "url": "http://..."})
+    # client = ClaudeSDKClient(options=options, on_notification=handle_notification)
+    #
     client = ClaudeSDKClient(
         on_notification=handle_notification,
         on_elicitation_request=handle_elicitation,
+        transport=mock_transport,
     )
 
-    # --- Manually mock the transport layer ---
-    # In a real application, you would not do this. The client would connect
-    # to the actual Claude Code service.
-    mock_transport = MockTransport()
-
-    def mock_transport_factory(*args, **kwargs):
-        return mock_transport
-
-    # In a real application, the client would use the real transport. For this
-    # example, we patch the transport class to return our mock instance.
-    with patch(
-        "claude_code_sdk.client.SubprocessCLITransport",
-        return_value=mock_transport,
-    ):
-        async with client:
-            print("\nSending initial query to the client...")
-            await client.query("Please start a process that requires my input.")
+    async with client:
+        print("\nSending initial query to the client...")
+        await client.query("Please start a process that requires my input.")
 
         print("\nWaiting for responses from the client...")
         async for message in client.receive_response():
