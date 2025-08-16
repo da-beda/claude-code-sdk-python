@@ -13,6 +13,14 @@ Usage:
 ./examples/streaming_mode.py - List the examples
 ./examples/streaming_mode.py all - Run all examples
 ./examples/streaming_mode.py basic_streaming - Run a specific example
+
+Configuration:
+By default, this script uses the standard subprocess-based transport. To use the
+networked HTTP transport, you must have a `cw_mcp` server running and modify
+the `ClaudeSDKClient` instantiation to include the transport configuration.
+
+See `example_with_options` for an example of how to set `ClaudeCodeOptions`,
+or see `http_transport_example.py` for a dedicated example.
 """
 
 import asyncio
@@ -227,6 +235,8 @@ async def example_with_options():
     print("=== Custom Options Example ===")
 
     # Configure options
+    # To connect to a networked server, you would add the `transport` option here:
+    # transport={"type": "http", "url": "http://127.0.0.1:8080"},
     options = ClaudeCodeOptions(
         allowed_tools=["Read", "Write"],  # Allow file operations
         max_thinking_tokens=10000,

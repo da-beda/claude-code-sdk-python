@@ -54,3 +54,22 @@ class MessageParseError(ClaudeSDKError):
     def __init__(self, message: str, data: dict[str, Any] | None = None):
         self.data = data
         super().__init__(message)
+
+
+class NetworkError(ClaudeSDKError):
+    """Represents a network error during communication with the tool server."""
+
+
+class ToolExecutionError(ClaudeSDKError):
+    """Represents an error reported by the tool server during execution."""
+
+    def __init__(self, message: str, code: int, hint: str | None = None) -> None:
+        super().__init__(f"Tool execution failed with code {code}: {message}")
+        self.code = code
+        self.hint = hint
+
+    def __str__(self) -> str:
+        message = super().__str__()
+        if self.hint:
+            message += f"\nHint: {self.hint}"
+        return message

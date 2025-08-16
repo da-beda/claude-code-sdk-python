@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.1.0
+
+### Added
+
+- **HTTP Transport Support**: The SDK can now connect to a networked `cw_mcp` server over HTTP. This allows using the SDK with remote tool servers instead of only local subprocesses.
+  - Configure the transport via the new `transport` option in `ClaudeCodeOptions`.
+  - Added `HttpTransport` implementation for network communication.
+- **New Error Types**:
+  - `NetworkError`: For issues related to network connectivity with the HTTP transport.
+  - `ToolExecutionError`: For errors reported by the tool server during execution (JSON-RPC errors).
+
+### Changed
+
+- **Breaking Change**: The method for configuring the client's transport has been standardized. The new `transport` option in `ClaudeCodeOptions` should be used to specify the connection method (e.g., `http` or the default `stdio`).
+- **Breaking Change**: The client's error handling for server-side errors has changed. Instead of relying on parsing log messages, the client now raises a `ToolExecutionError` when it receives a standard JSON-RPC error response from the server.
+- The `ClaudeSDKClient` and the standalone `query` function now act as factories, creating the appropriate transport based on the provided configuration.
+- The `ClaudeSDKClient` constructor now accepts a `transport` object, allowing for custom transport injection (useful for mocking and testing).
+
 ## 0.0.21
 
 - Add support for server-initiated events with a bidirectional event stream.

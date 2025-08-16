@@ -24,6 +24,22 @@ async def basic_example():
     print()
 
 
+# To use the SDK with a networked Claude Code server instead of a local
+# subprocess, you can configure the HTTP transport in ClaudeCodeOptions.
+#
+# For example:
+#
+# options = ClaudeCodeOptions(
+#     transport={
+#         "type": "http",
+#         "url": "http://127.0.0.1:8080",  # URL of your cw_mcp server
+#     }
+# )
+#
+# You would then pass these options to the query() function.
+# The http_transport_example.py file shows a full working example.
+
+
 async def with_options_example():
     """Example with custom options."""
     print("=== With Options Example ===")

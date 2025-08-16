@@ -76,6 +76,28 @@ options = ClaudeCodeOptions(
 )
 ```
 
+## Connecting to a Networked Server (HTTP)
+
+By default, the SDK runs Claude Code as a local subprocess. You can also configure it to connect to a `cw_mcp` server running as a network service. This is done via the `transport` option in `ClaudeCodeOptions`.
+
+```python
+from claude_code_sdk import query, ClaudeCodeOptions
+
+# Configure the client to use the HTTP transport
+options = ClaudeCodeOptions(
+    transport={
+        "type": "http",
+        "url": "http://127.0.0.1:8080",  # URL of your cw_mcp server
+    }
+)
+
+# The query will now be sent over the network
+async for message in query(prompt="Hello from a network client!", options=options):
+    print(message)
+```
+
+See [`examples/http_transport_example.py`](examples/http_transport_example.py) for a complete working example.
+
 ## API Reference
 
 ### `query(prompt, options=None)`
@@ -99,11 +121,15 @@ See [src/claude_code_sdk/types.py](src/claude_code_sdk/types.py) for complete ty
 
 ```python
 from claude_code_sdk import (
-    ClaudeSDKError,      # Base error
-    CLINotFoundError,    # Claude Code not installed
-    CLIConnectionError,  # Connection issues
-    ProcessError,        # Process failed
-    CLIJSONDecodeError,  # JSON parsing issues
+    ClaudeSDKError,
+    # Subprocess-specific errors
+    CLINotFoundError,
+    CLIConnectionError,
+    ProcessError,
+    CLIJSONDecodeError,
+    # Network-specific errors
+    NetworkError,
+    ToolExecutionError,
 )
 
 try:
@@ -113,8 +139,10 @@ except CLINotFoundError:
     print("Please install Claude Code")
 except ProcessError as e:
     print(f"Process failed with exit code: {e.exit_code}")
-except CLIJSONDecodeError as e:
-    print(f"Failed to parse response: {e}")
+except NetworkError as e:
+    print(f"Network error: {e}")
+except ToolExecutionError as e:
+    print(f"Tool execution error: {e}")
 ```
 
 See [src/claude_code_sdk/_errors.py](src/claude_code_sdk/_errors.py) for all error types.

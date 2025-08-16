@@ -186,6 +186,7 @@ class ClaudeCodeOptions:
     extra_args: dict[str, str | None] = field(
         default_factory=dict
     )  # Pass arbitrary CLI flags
+    transport: McpServerConfig | None = None
 
 
 Message = (

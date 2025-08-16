@@ -8,6 +8,19 @@ Each example is self-contained and can be run independently.
 The queries are intentionally simplistic. In reality, a query can be a more
 complex task that Claude SDK uses its agentic capabilities and tools (e.g. run
 bash commands, edit files, search the web, fetch web content) to accomplish.
+
+Configuration for Networked Mode:
+To use these examples with a networked Claude Code server, you need to
+configure the client. You can do this by passing `ClaudeCodeOptions`
+when creating the client.
+
+Example:
+from claude_code_sdk import ClaudeCodeOptions
+options = ClaudeCodeOptions(transport={"type": "http", "url": "http://..."})
+client = ClaudeSDKClient(options=options)
+# await client.connect() # if not using 'async with'
+
+See `http_transport_example.py` for a complete, runnable example.
 """
 
 # ============================================================================
